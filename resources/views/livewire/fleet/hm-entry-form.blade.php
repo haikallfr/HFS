@@ -496,9 +496,9 @@
                     this.gpsPermissionState = 'denied';
                     this.gpsMessage = 'Izin lokasi ditolak.';
                 } else if (error.code === 2) {
-                    this.gpsMessage = 'Lokasi perangkat belum tersedia.';
+                    this.gpsMessage = 'Lokasi perangkat belum tersedia. Pastikan layanan lokasi sistem aktif.';
                 } else if (error.code === 3) {
-                    this.gpsMessage = 'Permintaan lokasi terlalu lama.';
+                    this.gpsMessage = 'Permintaan lokasi terlalu lama. Coba lagi setelah Wi-Fi/GPS stabil.';
                 } else {
                     this.gpsMessage = 'GPS belum siap.';
                 }
@@ -670,26 +670,43 @@
                     throw new Error('Browser ini tidak mendukung geolocation.');
                 }
 
+                const attempts = [
+                    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+                    { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
+                ];
+
+                let lastError = null;
+
+                for (const options of attempts) {
+                    try {
+                        const position = await this.getPosition(options);
+                        this.applyPosition(position);
+                        this.gpsMessage = 'Lokasi terkunci.';
+                        this.gpsPermissionState = 'granted';
+                        return position;
+                    } catch (error) {
+                        lastError = error;
+                        this.handleGpsError(error);
+                    }
+                }
+
+                if (forcePrompt && lastError?.code === 1) {
+                    throw new Error('Izin lokasi ditolak. Aktifkan lagi dari pengaturan browser atau sistem.');
+                }
+
+                if (lastError?.code === 2) {
+                    throw new Error('Lokasi belum terbaca. Aktifkan Location Services di sistem operasi lalu coba lagi.');
+                }
+
+                if (lastError?.code === 3) {
+                    throw new Error('Lokasi timeout. Coba lagi setelah koneksi Wi-Fi/GPS stabil.');
+                }
+
+                throw new Error('GPS wajib aktif sebelum pengambilan foto.');
+            },
+            getPosition(options) {
                 return new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(
-                        position => {
-                            this.applyPosition(position);
-                            this.gpsMessage = 'Lokasi terkunci.';
-                            this.gpsPermissionState = 'granted';
-                            resolve(position);
-                        },
-                        error => {
-                            this.handleGpsError(error);
-
-                            if (forcePrompt && error.code === 1) {
-                                reject(new Error('Izin lokasi ditolak. Aktifkan lagi dari pengaturan browser atau sistem.'));
-                                return;
-                            }
-
-                            reject(new Error('GPS wajib aktif sebelum pengambilan foto.'));
-                        },
-                        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-                    );
+                    navigator.geolocation.getCurrentPosition(resolve, reject, options);
                 });
             },
             drawWatermark(context, width, height, timestamp, lat, lng) {
