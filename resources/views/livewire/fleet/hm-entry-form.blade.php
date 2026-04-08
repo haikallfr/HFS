@@ -288,9 +288,6 @@
                 if (!this.gpsSupported) {
                     this.gpsMessage = 'Browser ini tidak mendukung geolocation.';
                     this.gpsHelpText = 'Gunakan browser modern di perangkat yang mengizinkan akses lokasi.';
-                } else if (!window.isSecureContext) {
-                    this.gpsMessage = 'Akses lokasi butuh halaman yang aman.';
-                    this.gpsHelpText = 'Buka aplikasi dari http://127.0.0.1:8000 atau HTTPS, bukan file statis.';
                 }
             },
             observeConnectionChanges() {
@@ -333,11 +330,6 @@
             updateGpsHelpText() {
                 if (!this.gpsSupported) {
                     this.gpsHelpText = 'Gunakan browser yang mendukung geolocation.';
-                    return;
-                }
-
-                if (!window.isSecureContext) {
-                    this.gpsHelpText = 'Lokasi hanya bisa aktif dari halaman aman seperti http://127.0.0.1:8000 atau HTTPS.';
                     return;
                 }
 
@@ -471,12 +463,6 @@
             async requestGps(forcePrompt = true) {
                 if (!this.gpsSupported) {
                     this.gpsMessage = 'Browser ini tidak mendukung geolocation.';
-                    this.updateGpsHelpText();
-                    return;
-                }
-
-                if (!window.isSecureContext) {
-                    this.gpsMessage = 'Halaman belum aman untuk geolocation.';
                     this.updateGpsHelpText();
                     return;
                 }
