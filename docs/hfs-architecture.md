@@ -22,6 +22,9 @@
 - `hour_meter_logs` stores HM, fuel, photo, GPS, sync metadata
 - `service_logs` stores preventive maintenance history
 - HM sequence validation and LPH anomaly calculation live in [`app/Models/HourMeterLog.php`](/Applications/MAMP/htdocs/HFS EMAS/app/Models/HourMeterLog.php)
+- Mobile HM camera flow now targets Apple devices more explicitly:
+  - GPS and camera access must be tested over HTTPS because Safari/WebKit blocks sensitive APIs on plain local HTTP/IP access
+  - native camera capture is triggered from a JavaScript button flow instead of relying on a `<label>` trigger, to avoid Safari inconsistencies on iPhone and Mac
 
 ### 3. Procurement & Inventory
 

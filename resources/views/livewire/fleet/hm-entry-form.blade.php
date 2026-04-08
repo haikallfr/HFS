@@ -72,14 +72,14 @@
                     <button type="button" @click="requestGps(true)" :disabled="locating || !gpsSupported" class="app-button inline-flex items-center rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">
                         <span x-text="locating ? 'Mencari lokasi...' : 'Aktifkan Lokasi'"></span>
                     </button>
-                    <label
-                        for="hm-camera-input"
-                        @click="prepareCameraCapture($event)"
-                        :class="gpsReady ? '' : 'pointer-events-none opacity-60'"
-                        class="app-button-secondary inline-flex cursor-pointer items-center rounded-xl px-4 py-3 text-sm font-medium"
+                    <button
+                        type="button"
+                        @click="openNativeCamera()"
+                        :disabled="!gpsReady || processing"
+                        class="app-button-secondary inline-flex items-center rounded-xl px-4 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
                     >
                         Ambil Foto dari Kamera
-                    </label>
+                    </button>
                 </div>
 
                 <form x-ref="form" @submit.prevent="submitEntry()" class="space-y-5">
@@ -519,17 +519,16 @@
 
                 this.updateGpsHelpText();
             },
-            prepareCameraCapture(event) {
+            openNativeCamera() {
                 if (!this.gpsReady) {
                     this.lastSyncMessage = 'Aktifkan lokasi dulu sebelum membuka kamera.';
-                    event.preventDefault();
-                    return false;
+                    return;
                 }
 
                 this.cameraMessage = 'Membuka kamera bawaan perangkat...';
                 this.lastSyncMessage = '';
                 this.$refs.cameraInput.value = null;
-                return true;
+                this.$refs.cameraInput.click();
             },
             async handleCameraFile(event) {
                 const file = event.target.files?.[0];
