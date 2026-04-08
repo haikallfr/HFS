@@ -53,18 +53,33 @@
                             <p class="app-muted mt-3 text-xs" x-text="lastSyncMessage"></p>
                         </template>
                     </div>
+
+                    <div class="app-panel-strong rounded-2xl p-4 sm:col-span-2">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="app-muted text-xs uppercase tracking-[0.2em]">Kamera</p>
+                                <p class="app-title mt-2 text-base font-semibold" x-text="cameraReady ? 'Kamera siap' : 'Kamera belum siap'"></p>
+                                <p class="app-muted mt-1 text-sm" x-text="cameraMessage"></p>
+                            </div>
+                            <span class="rounded-full px-3 py-1 text-xs font-medium" :class="cameraReady ? 'app-status-success' : 'app-status-warning'">
+                                <span x-text="cameraReady ? 'Aktif' : 'Cek izin'"></span>
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="flex flex-wrap gap-3">
                     <button type="button" @click="requestGps(true)" :disabled="locating || !gpsSupported" class="app-button inline-flex items-center rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">
                         <span x-text="locating ? 'Mencari lokasi...' : 'Aktifkan Lokasi'"></span>
                     </button>
-                    <button type="button" @click="startCamera()" :disabled="!gpsReady || openingCamera" class="app-button-secondary inline-flex items-center rounded-xl px-4 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60">
-                        <span x-text="openingCamera ? 'Membuka kamera...' : 'Buka Kamera'"></span>
-                    </button>
-                    <button type="button" @click="capturePhoto()" :disabled="!gpsReady || !cameraReady || processing" class="app-button-secondary inline-flex items-center rounded-xl px-4 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60">
-                        <span x-text="processing ? 'Memproses foto...' : 'Ambil Foto HM'"></span>
-                    </button>
+                    <label
+                        for="hm-camera-input"
+                        @click="prepareCameraCapture($event)"
+                        :class="gpsReady ? '' : 'pointer-events-none opacity-60'"
+                        class="app-button-secondary inline-flex cursor-pointer items-center rounded-xl px-4 py-3 text-sm font-medium"
+                    >
+                        Ambil Foto dari Kamera
+                    </label>
                 </div>
 
                 <form x-ref="form" @submit.prevent="submitEntry()" class="space-y-5">
@@ -158,21 +173,25 @@
                 </div>
 
                 <div class="mt-6 space-y-4" x-show="open">
-                    <div class="grid gap-4 lg:grid-cols-2">
-                        <div class="overflow-hidden rounded-3xl border bg-black" style="border-color: var(--border);">
-                            <video x-ref="video" autoplay playsinline muted class="aspect-[4/5] w-full object-cover"></video>
-                        </div>
+                    <input
+                        id="hm-camera-input"
+                        x-ref="cameraInput"
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        class="sr-only"
+                        @change="handleCameraFile($event)"
+                    >
 
-                        <div class="overflow-hidden rounded-3xl border" style="border-color: var(--border); background: var(--surface-strong);">
-                            <template x-if="previewData">
-                                <img :src="previewData" alt="Preview HM" class="aspect-[4/5] w-full object-cover">
-                            </template>
-                            <template x-if="!previewData">
-                                <div class="grid aspect-[4/5] place-items-center p-6 text-center text-sm app-muted">
-                                    Preview foto akan muncul setelah capture berhasil.
-                                </div>
-                            </template>
-                        </div>
+                    <div class="overflow-hidden rounded-3xl border" style="border-color: var(--border); background: var(--surface-strong);">
+                        <template x-if="previewData">
+                            <img :src="previewData" alt="Preview HM" class="aspect-[4/5] w-full object-cover">
+                        </template>
+                        <template x-if="!previewData">
+                            <div class="grid aspect-[4/5] place-items-center p-6 text-center text-sm app-muted">
+                                Setelah Anda ambil foto dari kamera bawaan HP, hasilnya akan muncul di sini.
+                            </div>
+                        </template>
                     </div>
 
                     <canvas x-ref="canvas" class="hidden"></canvas>
@@ -233,11 +252,9 @@
     <script>
         Alpine.data('hmCapture', wire => ({
             wire,
-            stream: null,
             db: null,
             watchId: null,
             locating: false,
-            openingCamera: false,
             processing: false,
             submitting: false,
             gpsReady: false,
@@ -502,34 +519,88 @@
 
                 this.updateGpsHelpText();
             },
-            async startCamera() {
+            prepareCameraCapture(event) {
                 if (!this.gpsReady) {
                     this.lastSyncMessage = 'Aktifkan lokasi dulu sebelum membuka kamera.';
+                    event.preventDefault();
+                    return false;
+                }
+
+                this.cameraMessage = 'Membuka kamera bawaan perangkat...';
+                this.lastSyncMessage = '';
+                this.$refs.cameraInput.value = null;
+                return true;
+            },
+            async handleCameraFile(event) {
+                const file = event.target.files?.[0];
+
+                if (!file) {
+                    this.cameraReady = false;
+                    this.cameraMessage = 'Belum ada foto yang diambil.';
                     return;
                 }
 
-                this.openingCamera = true;
+                this.processing = true;
+                this.cameraMessage = 'Memproses foto dari kamera...';
 
                 try {
-                    this.stream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            facingMode: { ideal: 'environment' },
-                            width: { ideal: 1280 },
-                            height: { ideal: 1600 },
-                        },
-                        audio: false,
-                    });
+                    await this.refreshGpsBeforeShot(false);
 
-                    this.$refs.video.srcObject = this.stream;
+                    const image = await this.loadImageFile(file);
+                    const canvas = this.$refs.canvas;
+                    const context = canvas.getContext('2d');
+                    const width = image.naturalWidth || image.width || 960;
+                    const height = image.naturalHeight || image.height || 1280;
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    context.drawImage(image, 0, 0, width, height);
+
+                    const now = new Date();
+                    const timestamp = now.toISOString();
+                    const lat = Number(this.currentLat);
+                    const lng = Number(this.currentLng);
+
+                    this.drawWatermark(context, width, height, timestamp, lat, lng);
+
+                    const { blob, dataUrl } = await this.canvasToCompressedWebp(canvas);
+
+                    if (blob.size > 500 * 1024) {
+                        throw new Error('Ukuran foto masih melebihi 500 KB.');
+                    }
+
+                    this.previewData = dataUrl;
+                    this.captureTimestampValue = timestamp;
+                    this.wire.set('capturePayload', dataUrl);
+                    this.wire.set('captureTimestamp', timestamp);
+                    this.wire.set('latitude', lat);
+                    this.wire.set('longitude', lng);
+                    this.wire.set('syncStatus', this.syncStatusValue);
                     this.cameraReady = true;
-                    this.cameraMessage = 'Kamera siap.';
+                    this.cameraMessage = 'Foto berhasil diambil dari kamera bawaan.';
+                    this.captureInfo = `${blob.type} • ${(blob.size / 1024).toFixed(0)} KB • ${timestamp}`;
                 } catch (error) {
                     this.cameraReady = false;
-                    this.cameraMessage = 'Gagal mengakses kamera.';
-                    this.lastSyncMessage = 'Izinkan akses kamera pada browser agar foto HM bisa diambil.';
+                    this.cameraMessage = error.message || 'Foto dari kamera tidak berhasil diproses.';
+                    this.captureInfo = this.cameraMessage;
+                    this.lastSyncMessage = this.cameraMessage;
                 } finally {
-                    this.openingCamera = false;
+                    this.processing = false;
+                    event.target.value = null;
                 }
+            },
+            loadImageFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const image = new Image();
+                        image.onload = () => resolve(image);
+                        image.onerror = () => reject(new Error('Foto tidak bisa dibaca.'));
+                        image.src = reader.result;
+                    };
+                    reader.onerror = () => reject(new Error('Foto tidak bisa dibaca.'));
+                    reader.readAsDataURL(file);
+                });
             },
             async submitEntry() {
                 if (this.submitting) {
@@ -608,53 +679,6 @@
                 }
 
                 return null;
-            },
-            async capturePhoto() {
-                if (!this.gpsReady || !this.cameraReady || this.processing) {
-                    return;
-                }
-
-                this.processing = true;
-
-                try {
-                    await this.refreshGpsBeforeShot(false);
-
-                    const video = this.$refs.video;
-                    const canvas = this.$refs.canvas;
-                    const context = canvas.getContext('2d');
-                    const width = video.videoWidth || 960;
-                    const height = video.videoHeight || 1280;
-                    canvas.width = width;
-                    canvas.height = height;
-
-                    context.drawImage(video, 0, 0, width, height);
-
-                    const now = new Date();
-                    const timestamp = now.toISOString();
-                    const lat = Number(this.currentLat);
-                    const lng = Number(this.currentLng);
-
-                    this.drawWatermark(context, width, height, timestamp, lat, lng);
-
-                    const { blob, dataUrl } = await this.canvasToCompressedWebp(canvas);
-
-                    if (blob.size > 500 * 1024) {
-                        throw new Error('Ukuran foto masih melebihi 500 KB.');
-                    }
-
-                    this.previewData = dataUrl;
-                    this.captureTimestampValue = timestamp;
-                    this.wire.set('capturePayload', dataUrl);
-                    this.wire.set('captureTimestamp', timestamp);
-                    this.wire.set('latitude', lat);
-                    this.wire.set('longitude', lng);
-                    this.wire.set('syncStatus', this.syncStatusValue);
-                    this.captureInfo = `${blob.type} • ${(blob.size / 1024).toFixed(0)} KB • ${timestamp}`;
-                } catch (error) {
-                    this.captureInfo = error.message || 'Gagal memproses foto.';
-                } finally {
-                    this.processing = false;
-                }
             },
             async refreshGpsBeforeShot(forcePrompt = false) {
                 if (!this.gpsSupported) {
@@ -749,6 +773,8 @@
                 this.currentLat = null;
                 this.currentLng = null;
                 this.gpsReady = false;
+                this.cameraReady = false;
+                this.cameraMessage = 'Kamera belum dibuka.';
                 this.coordinatesText = 'Koordinat belum tersedia.';
                 this.wire.set('capturePayload', null);
                 this.wire.set('captureTimestamp', null);
