@@ -74,11 +74,27 @@
                     </button>
                     <button
                         type="button"
-                        @click="openNativeCamera()"
+                        @click="openLiveCamera()"
+                        :disabled="!gpsReady || openingCamera"
+                        class="app-button-secondary inline-flex items-center rounded-xl px-4 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        <span x-text="openingCamera ? 'Membuka kamera...' : 'Buka Kamera'"></span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="captureFromLiveCamera()"
+                        :disabled="!gpsReady || !cameraReady || processing"
+                        class="app-button-secondary inline-flex items-center rounded-xl px-4 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        <span x-text="processing ? 'Memproses foto...' : 'Ambil Foto'"></span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="triggerFileFallback()"
                         :disabled="!gpsReady || processing"
                         class="app-button-secondary inline-flex items-center rounded-xl px-4 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                        Ambil Foto dari Kamera
+                        Upload/Camera Fallback
                     </button>
                 </div>
 
@@ -183,15 +199,31 @@
                         @change="handleCameraFile($event)"
                     >
 
-                    <div class="overflow-hidden rounded-3xl border" style="border-color: var(--border); background: var(--surface-strong);">
-                        <template x-if="previewData">
-                            <img :src="previewData" alt="Preview HM" class="aspect-[4/5] w-full object-cover">
-                        </template>
-                        <template x-if="!previewData">
-                            <div class="grid aspect-[4/5] place-items-center p-6 text-center text-sm app-muted">
-                                Setelah Anda ambil foto dari kamera bawaan HP, hasilnya akan muncul di sini.
-                            </div>
-                        </template>
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <div class="overflow-hidden rounded-3xl border" style="border-color: var(--border); background: var(--surface-strong);">
+                            <template x-if="cameraReady && !previewData">
+                                <video x-ref="video" autoplay playsinline muted class="aspect-[4/5] w-full object-cover"></video>
+                            </template>
+                            <template x-if="!cameraReady && !previewData">
+                                <div class="grid aspect-[4/5] place-items-center p-6 text-center text-sm app-muted">
+                                    Buka kamera untuk menampilkan preview live di halaman.
+                                </div>
+                            </template>
+                            <template x-if="previewData">
+                                <img :src="previewData" alt="Preview HM" class="aspect-[4/5] w-full object-cover">
+                            </template>
+                        </div>
+
+                        <div class="overflow-hidden rounded-3xl border" style="border-color: var(--border); background: var(--surface-strong);">
+                            <template x-if="previewData">
+                                <img :src="previewData" alt="Hasil foto HM" class="aspect-[4/5] w-full object-cover">
+                            </template>
+                            <template x-if="!previewData">
+                                <div class="grid aspect-[4/5] place-items-center p-6 text-center text-sm app-muted">
+                                    Setelah Anda ambil foto, hasil ber-watermark akan muncul di sini.
+                                </div>
+                            </template>
+                        </div>
                     </div>
 
                     <canvas x-ref="canvas" class="hidden"></canvas>
@@ -253,8 +285,10 @@
         Alpine.data('hmCapture', wire => ({
             wire,
             db: null,
+            stream: null,
             watchId: null,
             locating: false,
+            openingCamera: false,
             processing: false,
             submitting: false,
             gpsReady: false,
@@ -513,8 +547,116 @@
 
                 this.cameraMessage = 'Membuka kamera bawaan perangkat...';
                 this.lastSyncMessage = '';
-                this.$refs.cameraInput.value = null;
+                this.$refs.cameraInput.value = '';
                 this.$refs.cameraInput.click();
+            },
+            async openLiveCamera() {
+                if (!this.gpsReady) {
+                    this.lastSyncMessage = 'Aktifkan lokasi dulu sebelum membuka kamera.';
+                    return;
+                }
+
+                if (!navigator.mediaDevices?.getUserMedia) {
+                    this.cameraMessage = 'Browser tidak mendukung kamera live. Gunakan fallback.';
+                    return;
+                }
+
+                this.openingCamera = true;
+                this.cameraMessage = 'Membuka kamera live...';
+                this.lastSyncMessage = '';
+
+                try {
+                    this.stopLiveCamera();
+                    this.previewData = null;
+                    this.captureTimestampValue = null;
+
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1280 },
+                            height: { ideal: 1600 },
+                        },
+                        audio: false,
+                    });
+
+                    await this.attachLiveStream();
+                    this.cameraReady = true;
+                    this.cameraMessage = 'Kamera live siap.';
+                } catch (error) {
+                    this.cameraReady = false;
+                    this.cameraMessage = 'Kamera live gagal dibuka. Gunakan fallback.';
+                    this.lastSyncMessage = error.message || this.cameraMessage;
+                } finally {
+                    this.openingCamera = false;
+                }
+            },
+            triggerFileFallback() {
+                this.openNativeCamera();
+            },
+            async attachLiveStream() {
+                await this.$nextTick();
+
+                const video = this.$refs.video;
+
+                if (!video || !this.stream) {
+                    throw new Error('Preview kamera tidak ditemukan.');
+                }
+
+                video.srcObject = this.stream;
+
+                await new Promise((resolve, reject) => {
+                    const timeout = window.setTimeout(() => reject(new Error('Preview kamera tidak berjalan.')), 8000);
+
+                    video.onloadedmetadata = async () => {
+                        try {
+                            await video.play();
+                            window.clearTimeout(timeout);
+                            resolve();
+                        } catch (error) {
+                            window.clearTimeout(timeout);
+                            reject(error);
+                        }
+                    };
+                });
+            },
+            stopLiveCamera() {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+            },
+            async captureFromLiveCamera() {
+                if (!this.cameraReady || !this.stream) {
+                    this.lastSyncMessage = 'Buka kamera live dulu sebelum mengambil foto.';
+                    return;
+                }
+
+                this.processing = true;
+                this.cameraMessage = 'Memproses foto dari kamera live...';
+
+                try {
+                    await this.refreshGpsBeforeShot(false);
+
+                    const video = this.$refs.video;
+                    const canvas = this.$refs.canvas;
+                    const context = canvas.getContext('2d');
+                    const width = video.videoWidth || 960;
+                    const height = video.videoHeight || 1280;
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    context.drawImage(video, 0, 0, width, height);
+
+                    await this.finalizeCanvasCapture(canvas);
+                    this.stopLiveCamera();
+                } catch (error) {
+                    this.cameraReady = false;
+                    this.cameraMessage = error.message || 'Foto dari kamera live tidak berhasil diproses.';
+                    this.captureInfo = this.cameraMessage;
+                    this.lastSyncMessage = this.cameraMessage;
+                } finally {
+                    this.processing = false;
+                }
             },
             async handleCameraFile(event) {
                 const file = event.target.files?.[0];
@@ -540,30 +682,8 @@
                     canvas.height = height;
 
                     context.drawImage(image, 0, 0, width, height);
-
-                    const now = new Date();
-                    const timestamp = now.toISOString();
-                    const lat = Number(this.currentLat);
-                    const lng = Number(this.currentLng);
-
-                    this.drawWatermark(context, width, height, timestamp, lat, lng);
-
-                    const { blob, dataUrl } = await this.canvasToCompressedWebp(canvas);
-
-                    if (blob.size > 500 * 1024) {
-                        throw new Error('Ukuran foto masih melebihi 500 KB.');
-                    }
-
-                    this.previewData = dataUrl;
-                    this.captureTimestampValue = timestamp;
-                    this.wire.set('capturePayload', dataUrl);
-                    this.wire.set('captureTimestamp', timestamp);
-                    this.wire.set('latitude', lat);
-                    this.wire.set('longitude', lng);
-                    this.wire.set('syncStatus', this.syncStatusValue);
-                    this.cameraReady = true;
-                    this.cameraMessage = 'Foto berhasil diambil dari kamera bawaan.';
-                    this.captureInfo = `${blob.type} • ${(blob.size / 1024).toFixed(0)} KB • ${timestamp}`;
+                    await this.finalizeCanvasCapture(canvas);
+                    this.cameraMessage = 'Foto berhasil diproses.';
                 } catch (error) {
                     this.cameraReady = false;
                     this.cameraMessage = error.message || 'Foto dari kamera tidak berhasil diproses.';
@@ -571,8 +691,35 @@
                     this.lastSyncMessage = this.cameraMessage;
                 } finally {
                     this.processing = false;
-                    event.target.value = null;
+                    event.target.value = '';
                 }
+            },
+            async finalizeCanvasCapture(canvas) {
+                const context = canvas.getContext('2d');
+                const width = canvas.width;
+                const height = canvas.height;
+                const now = new Date();
+                const timestamp = now.toISOString();
+                const lat = Number(this.currentLat);
+                const lng = Number(this.currentLng);
+
+                this.drawWatermark(context, width, height, timestamp, lat, lng);
+
+                const { blob, dataUrl } = await this.canvasToCompressedWebp(canvas);
+
+                if (blob.size > 500 * 1024) {
+                    throw new Error('Ukuran foto masih melebihi 500 KB.');
+                }
+
+                this.previewData = dataUrl;
+                this.captureTimestampValue = timestamp;
+                this.wire.set('capturePayload', dataUrl);
+                this.wire.set('captureTimestamp', timestamp);
+                this.wire.set('latitude', lat);
+                this.wire.set('longitude', lng);
+                this.wire.set('syncStatus', this.syncStatusValue);
+                this.cameraReady = true;
+                this.captureInfo = `${blob.type} • ${(blob.size / 1024).toFixed(0)} KB • ${timestamp}`;
             },
             loadImageFile(file) {
                 return new Promise((resolve, reject) => {
@@ -769,6 +916,7 @@
                 });
             },
             resetCapture() {
+                this.stopLiveCamera();
                 this.previewData = null;
                 this.captureTimestampValue = null;
                 this.captureInfo = 'Belum ada capture.';
