@@ -206,11 +206,11 @@
                                 autoplay
                                 playsinline
                                 muted
-                                x-show="!previewData && !!stream"
+                                x-show="!previewData && isStreamActive"
                                 class="aspect-[4/5] w-full object-cover"
                             ></video>
                             <div
-                                x-show="!previewData && !stream"
+                                x-show="!previewData && !isStreamActive"
                                 class="grid aspect-[4/5] place-items-center p-6 text-center text-sm app-muted"
                             >
                                 Buka kamera untuk menampilkan preview live di halaman.
@@ -291,7 +291,7 @@
         Alpine.data('hmCapture', wire => ({
             wire,
             db: null,
-            stream: null,
+            isStreamActive: false,
             watchId: null,
             locating: false,
             openingCamera: false,
@@ -314,6 +314,7 @@
             queuedCount: 0,
             lastSyncMessage: '',
             async init() {
+                this.liveStream = null;
                 this.db = await this.openDb();
                 await this.refreshQueueCount();
                 this.setConnectionState();
@@ -575,7 +576,8 @@
                     this.stopLiveCamera();
                     this.previewData = null;
                     this.captureTimestampValue = null;
-                    this.stream = await this.requestCameraStream();
+                    this.liveStream = await this.requestCameraStream();
+                    this.isStreamActive = true;
 
                     await this.attachLiveStream();
                     this.cameraReady = true;
@@ -618,31 +620,22 @@
 
                 const video = this.$refs.video;
 
-                if (!video || !this.stream) {
+                if (!video || !this.liveStream) {
                     throw new Error('Preview kamera tidak ditemukan.');
                 }
 
-                video.srcObject = this.stream;
+                video.srcObject = this.liveStream;
 
-                await new Promise((resolve, reject) => {
-                    const timeout = window.setTimeout(() => reject(new Error('Preview kamera tidak berjalan.')), 8000);
-
-                    video.onloadedmetadata = async () => {
-                        try {
-                            await video.play();
-                            window.clearTimeout(timeout);
-                            resolve();
-                        } catch (error) {
-                            window.clearTimeout(timeout);
-                            reject(error);
-                        }
-                    };
-                });
+                try {
+                    await video.play();
+                } catch (error) {
+                    console.warn('Pemutaran video tertunda oleh browser:', error);
+                }
             },
             stopLiveCamera() {
-                if (this.stream) {
-                    this.stream.getTracks().forEach(track => track.stop());
-                    this.stream = null;
+                if (this.liveStream) {
+                    this.liveStream.getTracks().forEach(track => track.stop());
+                    this.liveStream = null;
                 }
 
                 if (this.$refs.video) {
@@ -650,10 +643,11 @@
                     this.$refs.video.srcObject = null;
                 }
 
+                this.isStreamActive = false;
                 this.cameraReady = false;
             },
             async captureFromLiveCamera() {
-                if (!this.cameraReady || !this.stream) {
+                if (!this.cameraReady || !this.liveStream) {
                     this.lastSyncMessage = 'Buka kamera live dulu sebelum mengambil foto.';
                     return;
                 }
