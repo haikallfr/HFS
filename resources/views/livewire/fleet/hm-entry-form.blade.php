@@ -201,14 +201,20 @@
 
                     <div class="grid gap-4 lg:grid-cols-2">
                         <div class="overflow-hidden rounded-3xl border" style="border-color: var(--border); background: var(--surface-strong);">
-                            <template x-if="cameraReady && !previewData">
-                                <video x-ref="video" autoplay playsinline muted class="aspect-[4/5] w-full object-cover"></video>
-                            </template>
-                            <template x-if="!cameraReady && !previewData">
-                                <div class="grid aspect-[4/5] place-items-center p-6 text-center text-sm app-muted">
-                                    Buka kamera untuk menampilkan preview live di halaman.
-                                </div>
-                            </template>
+                            <video
+                                x-ref="video"
+                                autoplay
+                                playsinline
+                                muted
+                                x-show="!previewData && !!stream"
+                                class="aspect-[4/5] w-full object-cover"
+                            ></video>
+                            <div
+                                x-show="!previewData && !stream"
+                                class="grid aspect-[4/5] place-items-center p-6 text-center text-sm app-muted"
+                            >
+                                Buka kamera untuk menampilkan preview live di halaman.
+                            </div>
                             <template x-if="previewData">
                                 <img :src="previewData" alt="Preview HM" class="aspect-[4/5] w-full object-cover">
                             </template>
@@ -569,15 +575,7 @@
                     this.stopLiveCamera();
                     this.previewData = null;
                     this.captureTimestampValue = null;
-
-                    this.stream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            facingMode: { ideal: 'environment' },
-                            width: { ideal: 1280 },
-                            height: { ideal: 1600 },
-                        },
-                        audio: false,
-                    });
+                    this.stream = await this.requestCameraStream();
 
                     await this.attachLiveStream();
                     this.cameraReady = true;
@@ -588,6 +586,28 @@
                     this.lastSyncMessage = error.message || this.cameraMessage;
                 } finally {
                     this.openingCamera = false;
+                }
+            },
+            async requestCameraStream() {
+                try {
+                    return await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: { exact: 'environment' },
+                        },
+                        audio: false,
+                    });
+                } catch (error) {
+                    console.warn('Kamera belakang tidak ditemukan, beralih ke kamera default...', error);
+
+                    try {
+                        return await navigator.mediaDevices.getUserMedia({
+                            video: true,
+                            audio: false,
+                        });
+                    } catch (fallbackError) {
+                        console.error('Gagal total mengakses kamera:', fallbackError);
+                        throw new Error('Kamera tidak dapat diakses. Pastikan izin kamera sudah diberikan.');
+                    }
                 }
             },
             triggerFileFallback() {
@@ -624,6 +644,13 @@
                     this.stream.getTracks().forEach(track => track.stop());
                     this.stream = null;
                 }
+
+                if (this.$refs.video) {
+                    this.$refs.video.pause();
+                    this.$refs.video.srcObject = null;
+                }
+
+                this.cameraReady = false;
             },
             async captureFromLiveCamera() {
                 if (!this.cameraReady || !this.stream) {
