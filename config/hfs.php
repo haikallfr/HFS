@@ -101,12 +101,17 @@ return [
         ],
         [
             'label' => 'Procurement',
-            'route' => 'dashboard',
-            'permission' => 'procurement.pr.create',
+            'route' => 'procurement.index',
+            'permission' => [
+                'procurement.pr.create',
+                'procurement.pr.approve',
+                'procurement.po.manage',
+                'procurement.do.receive',
+            ],
         ],
         [
             'label' => 'Inventory',
-            'route' => 'dashboard',
+            'route' => 'inventory.index',
             'permission' => 'inventory.view',
         ],
     ],

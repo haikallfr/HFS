@@ -11,7 +11,9 @@ class HfsNavigation
     {
         return collect(config('hfs.navigation'))
             ->filter(function (array $item) use ($user): bool {
-                if (! $item['permission']) {
+                $permission = $item['permission'] ?? null;
+
+                if (! $permission) {
                     return true;
                 }
 
@@ -19,7 +21,17 @@ class HfsNavigation
                     return false;
                 }
 
-                return $user->can($item['permission']);
+                if (is_array($permission)) {
+                    foreach ($permission as $entry) {
+                        if ($user->can($entry)) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+
+                return $user->can($permission);
             })
             ->map(function (array $item): array {
                 $item['active'] = request()->routeIs($item['route']);

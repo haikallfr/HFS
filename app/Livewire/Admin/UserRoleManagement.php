@@ -46,6 +46,14 @@ class UserRoleManagement extends Component
         $this->userPassword = '';
         $this->selectedRoles = $user->roles->pluck('name')->all();
         $this->selectedPermissions = $user->permissions->pluck('name')->all();
+
+        $this->dispatch('open-user-form');
+    }
+
+    public function createUser(): void
+    {
+        $this->resetUserForm();
+        $this->dispatch('open-user-form');
     }
 
     public function resetUserForm(): void
@@ -63,6 +71,7 @@ class UserRoleManagement extends Component
         ]);
 
         $this->userIsActive = true;
+        $this->dispatch('close-user-form');
     }
 
     public function saveUser(): void
@@ -108,6 +117,14 @@ class UserRoleManagement extends Component
         $this->editingRoleId = $role->id;
         $this->roleName = $role->name;
         $this->rolePermissions = $role->permissions->pluck('name')->all();
+
+        $this->dispatch('open-role-form');
+    }
+
+    public function createRole(): void
+    {
+        $this->resetRoleForm();
+        $this->dispatch('open-role-form');
     }
 
     public function resetRoleForm(): void
@@ -117,6 +134,8 @@ class UserRoleManagement extends Component
             'roleName',
             'rolePermissions',
         ]);
+
+        $this->dispatch('close-role-form');
     }
 
     public function saveRole(): void
@@ -136,6 +155,40 @@ class UserRoleManagement extends Component
 
         $this->resetRoleForm();
         session()->flash('status', 'Role berhasil disimpan.');
+    }
+
+    public function deleteUser(int $userId): void
+    {
+        $user = User::findOrFail($userId);
+
+        abort_if(auth()->id() === $user->id, 422, 'User yang sedang login tidak bisa dihapus.');
+
+        $user->syncRoles([]);
+        $user->syncPermissions([]);
+        $user->delete();
+
+        if ($this->editingUserId === $userId) {
+            $this->resetUserForm();
+        }
+
+        session()->flash('status', 'User berhasil dihapus.');
+    }
+
+    public function deleteRole(int $roleId): void
+    {
+        $role = Role::findOrFail($roleId);
+
+        abort_if($role->name === 'Owner', 422, 'Role Owner tidak bisa dihapus.');
+        abort_if(User::role($role->name)->exists(), 422, 'Role masih dipakai user dan belum bisa dihapus.');
+
+        $role->syncPermissions([]);
+        $role->delete();
+
+        if ($this->editingRoleId === $roleId) {
+            $this->resetRoleForm();
+        }
+
+        session()->flash('status', 'Role berhasil dihapus.');
     }
 
     public function render()

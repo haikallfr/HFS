@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-        <meta name="theme-color" content="#0f172a">
+        <meta name="theme-color" content="#171717">
 
         <title>{{ config('app.name', 'HFS') }}</title>
 
@@ -15,14 +15,14 @@
     </head>
     <body class="font-sans antialiased">
         <div class="app-shell grid min-h-screen place-items-center px-6 py-10">
-            <section class="w-full max-w-md">
+            <section class="w-full max-w-sm">
                 <div class="mb-8 flex justify-center">
                     <a href="{{ route('login') }}">
                         <x-application-logo class="h-14" />
                     </a>
                 </div>
 
-                <div class="app-panel w-full rounded-3xl p-8">
+                <div class="app-panel w-full rounded-[32px] p-8">
                     {{ $slot }}
                 </div>
             </section>

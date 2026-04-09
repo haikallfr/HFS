@@ -1,8 +1,8 @@
 <x-guest-layout>
     <div class="mb-8">
-        <p class="text-xs uppercase tracking-[0.24em] app-muted">Login</p>
-        <h1 class="mt-2 text-3xl font-semibold app-title">Masuk ke HFS</h1>
-        <p class="mt-2 text-sm app-muted">Masukkan email dan password akun Anda.</p>
+        <p class="text-xs uppercase tracking-[0.24em] app-muted">HFS Access</p>
+        <h1 class="mt-2 text-3xl font-semibold app-title">Masuk</h1>
+        <p class="mt-2 text-sm app-muted">Gunakan akun operasional untuk membuka sistem.</p>
     </div>
 
     <x-auth-session-status class="mb-4" :status="session('status')" />
@@ -32,12 +32,12 @@
         <!-- Remember Me -->
         <div class="block mt-4">
             <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded" style="border-color: var(--border); background: var(--surface-strong); color: var(--accent);" name="remember">
+                <input id="remember_me" type="checkbox" class="app-check" name="remember">
                 <span class="ms-2 text-sm app-muted">{{ __('Remember me') }}</span>
             </label>
         </div>
 
-        <div class="flex items-center justify-end mt-4">
+        <div class="mt-6 flex items-center justify-between gap-4">
             @if (Route::has('password.request'))
                 <a class="app-link text-sm rounded-md focus:outline-none" href="{{ route('password.request') }}">
                     {{ __('Forgot your password?') }}

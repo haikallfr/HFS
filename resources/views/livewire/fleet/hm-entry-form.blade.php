@@ -202,6 +202,7 @@
                     <div class="grid gap-4 lg:grid-cols-2">
                         <div class="overflow-hidden rounded-3xl border" style="border-color: var(--border); background: var(--surface-strong);">
                             <video
+                                wire:ignore
                                 x-ref="video"
                                 autoplay
                                 playsinline
@@ -232,7 +233,7 @@
                         </div>
                     </div>
 
-                    <canvas x-ref="canvas" class="hidden"></canvas>
+                    <canvas wire:ignore x-ref="canvas" class="hidden"></canvas>
 
                     <div class="grid gap-3 text-sm md:grid-cols-2">
                         <div class="app-panel-strong rounded-2xl p-4">

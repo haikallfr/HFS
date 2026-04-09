@@ -93,6 +93,19 @@ class DatabaseSeeder extends Seeder
 
         $siteAdmin->assignRole($siteAdminRole);
 
+        $logistik = User::query()->firstOrCreate([
+            'email' => 'logistik@hfs.local',
+        ], [
+            'site_id' => $site->id,
+            'name' => 'Logistik HO',
+            'employee_id' => 'HFS-HO-001',
+            'phone' => '081200000003',
+            'password' => Hash::make('password'),
+            'is_active' => true,
+        ]);
+
+        $logistik->assignRole($logistikRole);
+
         $workArea = WorkArea::query()->firstOrCreate([
             'code' => 'PIT-A1',
         ], [

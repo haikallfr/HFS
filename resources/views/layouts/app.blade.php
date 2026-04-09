@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-        <meta name="theme-color" content="#0f172a">
+        <meta name="theme-color" content="#171717">
         <link rel="manifest" href="/manifest.webmanifest">
 
         <title>{{ config('app.name', 'HFS') }}</title>
@@ -20,9 +20,11 @@
             @include('layouts.navigation')
 
             @isset($header)
-                <header class="border-b" style="border-color: var(--border); background: color-mix(in srgb, var(--surface) 82%, transparent);">
-                    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-                        {{ $header }}
+                <header class="mx-auto mt-6 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+                    <div class="app-panel rounded-[28px] px-6 py-6">
+                        <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                            {{ $header }}
+                        </div>
                     </div>
                 </header>
             @endisset
