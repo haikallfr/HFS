@@ -288,6 +288,8 @@
 
     @script
     <script>
+        let rawCameraStream = null;
+
         Alpine.data('hmCapture', wire => ({
             wire,
             db: null,
@@ -314,7 +316,6 @@
             queuedCount: 0,
             lastSyncMessage: '',
             async init() {
-                this.liveStream = null;
                 this.db = await this.openDb();
                 await this.refreshQueueCount();
                 this.setConnectionState();
@@ -576,7 +577,7 @@
                     this.stopLiveCamera();
                     this.previewData = null;
                     this.captureTimestampValue = null;
-                    this.liveStream = await this.requestCameraStream();
+                    rawCameraStream = await this.requestCameraStream();
                     this.isStreamActive = true;
 
                     await this.attachLiveStream();
@@ -620,11 +621,11 @@
 
                 const video = this.$refs.video;
 
-                if (!video || !this.liveStream) {
+                if (!video || !rawCameraStream) {
                     throw new Error('Preview kamera tidak ditemukan.');
                 }
 
-                video.srcObject = this.liveStream;
+                video.srcObject = rawCameraStream;
 
                 try {
                     await video.play();
@@ -633,9 +634,9 @@
                 }
             },
             stopLiveCamera() {
-                if (this.liveStream) {
-                    this.liveStream.getTracks().forEach(track => track.stop());
-                    this.liveStream = null;
+                if (rawCameraStream) {
+                    rawCameraStream.getTracks().forEach(track => track.stop());
+                    rawCameraStream = null;
                 }
 
                 if (this.$refs.video) {
@@ -647,7 +648,7 @@
                 this.cameraReady = false;
             },
             async captureFromLiveCamera() {
-                if (!this.cameraReady || !this.liveStream) {
+                if (!this.cameraReady || !rawCameraStream) {
                     this.lastSyncMessage = 'Buka kamera live dulu sebelum mengambil foto.';
                     return;
                 }
